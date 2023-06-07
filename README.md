@@ -94,5 +94,72 @@ web内核学习笔记《webkit技术内幕》
 
 6. renderer进程被创建的方式（1）Process-per-site-instance，为每一个页面创建独立的render进程，好处是每个页面互不影响，坏处是资源的巨大浪费（2）process-per-site，属于同一个域的页面共享一个render进程，不同域属于不同的进程。坏处是可能有特别大的renderer进程。（3）process-per-tag，为每一个标签页都创建一个独立的进程（4）single-process，所有渲染工作都在Browser进程中进行。
 
+7. brower进程和renderer进程都是在webkit的接口之外由chromium引入的，renderer进程主要是接受来自browser进程的请求并调用webkit接口层，同时将webkit的处理结果发送回去，更像是一个处理进程间通信的进程，browser进程主要处理renderer进程之间的通信。如下图所示
 
+   ![从webkit接口层到用户界面的路径](./images/从webkit接口层到用户界面的路径.PNG)
 
+8. chromium每个进程内部还有很多的线程，主要是为了保持用户界面的高响应度，保证UI先后才能不会被其他费时的操作阻塞。整体的流程是，broswer进程收到用户请求，然后经历UI线程——IO线程——renderer进程的IO线程——渲染线程——IO线程——Browser进程获取资源——GPU进程的IO线程——Browser进程收到结果）
+
+   ![chromium的多线程模型](./images/chromium的多线程模型.PNG)
+
+9. content接口提供了一层对多进程进行渲染的抽象接口，包括六个部分：（1）APP：主要是与应用程序的创建和初始化相关（2）Browser：HTML5功能和高级功能的实现，对外暴露一下例如Notification、Speech recognition等不同平台的实现。或者提供接口给Browser进程调用（3）Common：主要是进程、GPU相关的一些公共接口（4）Plugin：通知嵌入者Plugin进程何时被创建（5）Renderer：获取RenderThread的消息循环，注册V8 Extension等，或者被Browser进程调用（6）Utility：工具类接口。
+
+10. chromium的代码结构：基于Webkit上引入了很多新功能，还包含了浏览器、ChromiumOS和chrome frame、ChromiumOS是一个基于Web的操作系统，只支持web网页和web应用程序
+
+    ![chromium的源代码结构](./images/chromium的源代码结构.PNG)
+
+    ![chromium中content模块的代码结构](./images/chromium中content模块的代码结构.PNG)
+
+11. WebKit2是类似chromium的一套全新的接口，（chromium是基于webkit的）主要包括webview和所依赖的URL、请求等基础类。
+
+12. WebView指的是渲染的设置、渲染过程、界面等，包括WKView，就是一个窗口的句柄；WKContextRef，所有页面的上下文，包括local storage等；还有WKPageRef，就是浏览的基本单位
+
+### 第四章  资源加载和网络栈
+
+1. 资源包括：HTML页面、JavaScript代码、CSS样式表、图片、SVG2D矢量图形、CSS Shader、视频音频和字幕、字体文件、XSL样式表。他们在Webkit中都有各自的类，他们的公共基类是CachedResource，如下图所示
+
+   ![webkit的资源类](./images/webkit的资源类.PNG)
+
+2. 资源缓存分为两种，一种是查找内存是否有该资源，这里使用的key是URL，也就是说如果两个资源拥有不同的URL但是他们的内容完全一样，则会被认为是两个不同的资源，如下图所示：
+
+   ![资源的缓存机制](./images/资源的缓存机制.PNG)
+
+3. 资源加载器分为特定的资源加载器例如CSS的加载器是FontLoader类，以及缓存机制加载器，例如CachedResourceLoader，还有通用的资源加载器例如ResourceLoader类.当主线程被阻塞时，WebKit会启动另一个线程去遍历后面的HTML网页，收集需要的资源URL然后发送请求。也可以并发下载JavaScript代码资源
+
+   ![带有资源缓存机制的资源加载过程](./images/带有资源缓存机制的资源加载过程.PNG)
+
+4. chromium的多进程资源加载过程如下所示，由于安全性和效率（资源共享）的考虑，Renderer进程的资源获取实际上是IPCResourceLoaderBridge类通过进程间通信从Browser拿到的。消息的接收和派发交给ResourceDispatcher类来处理。在Browser进程中，ResourceMessageFilter类来过滤Renderer进程的消息，看是否与资源请求相关，然后派发该请求到ResourceDispatcherHostImpl类，然后通过ResourceLoader类来加载资源
+
+   ![chromium的多进程资源加载](./images/chromium的多进程资源加载.PNG)
+
+5. ResourceLoader类加载资源分为同步和异步![ResourceHandle及其资源请求方式](./images/ResourceHandle及其资源请求方式.PNG)
+
+6. chromium网络栈的基本组成，代码目录文件如下：除了HTTP协议，DNS解析模块，还包含了chromium为了减少网络时间而引入的新技术例如SPDY、QUIC
+
+   ![chromium网络模块的代码结构](./images/chromium网络模块的代码结构.PNG)
+
+7. chromium的网络栈调用过程如下，URLRequest类，会根据URL的scheme来决定创建http还是file类型的请求。之后URLRequest类会创建一个URLRequestJob子类的一个对象，例如URLRequestHttpJob（这个是有URLRequestJobFactory创建的）。然后URLRequestHttpJob会从Cookie管理器中获取URL的相关信息，并使用HttpTransactionFactory创建一个HttpTransaction。他会使用本地磁盘缓存机制查询资源是否在磁盘中。如果没有。则会整整的创建HttpTransaction对象。此时使用HttpNetworkSession类来管理和远程的连接会话，建立TCP Socket连接。![chromium网络栈的调用过程剖析](./images/chromium网络栈的调用过程剖析.PNG)
+
+8. ![chromium的网络代理获取过程](./images/chromium的网络代理获取过程.PNG)
+
+9. DNS解析也可以优化，例如缓存DNS解析，及DNS预解析技术
+
+10. 磁盘本地缓存需要考虑很多因素，例如缓存文件的移除策略、浏览器崩溃时的缓存文件保护，快速访问磁盘数据结构，避免缓存相同资源，系统升级时仍然可以使用等。在磁盘上，chromium至少需要一个索引文件和四个数据文件来索引表项，当资源文件过大时，会建立单独的文件来保存他们。不过大致就是和文件块类似，不过文件头拥有网络传输包头的信息。
+
+11. 一个网页的cookie只能被该域的网页访问。cookie分为两种，一种是session cookie，只能保存在内存中，浏览器退出则清除cookie。还有persistent cookie，浏览器退出时，仍然保留cookie的内容，但是有一个有效期。chromium的cookie实现如下所示，其中CookieMonster相当于cookie管理器，CookieStore是对外的接口，调用者可以设置和获得cookie，delegate类主要是报告各种cookie的事件，例如更新信息，CanonicalCookie是cookie的集合，表示一个域的cookie的集合。persistentcookie是管理cookie对磁盘的存储和读取
+
+    ![chromium的cookie实现](./images/chromium的cookie实现.PNG)
+
+12. DNS预取技术：在浏览网页的时候，chromium就提取网页中的超链接，将域名抽出来做DNS解析。每个域名都会使用单独一个线程来解析。或者用户在地址栏中输入地址时，就直接解析候选项的DNS地址了。
+
+13. TCP预链接和DNS预取技术一样，在浏览网页或者输入地址时就开始建立TCP链接了。
+
+14. HTTP pipeline技术：常见的服务器-浏览器通信是浏览器发送请求给服务器，服务器回复后再发送请求给服务器。HTTP pipeline技术就是把多个HTTP请求一次性提交给服务器的技术，不需要等待服务器回复。如下所示![http pipeline技术](./images/http pipeline技术.PNG)
+
+15. SPDY技术：SPDY是一种新的会话层协议，在HTTP和TPC协议之间，如下图所示：他的核心思想是多路复用。使用一个TCP连接来传输不限个数的资源请求读写数据流，而不是每一个请求都建立一个TCP。并且调整这些资源的优先级，使用压缩技术，也可以提供预下载。
+
+    ![SPDY协议所处层次](./images/SPDY协议所处层次.PNG)
+
+16. QUIC是一种新的传输层协议，主要是改进UDP协议的传输效率和加密
+
+    ### 第五章  HTML解释器和DOM模型
