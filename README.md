@@ -163,3 +163,23 @@ web内核学习笔记《webkit技术内幕》
 16. QUIC是一种新的传输层协议，主要是改进UDP协议的传输效率和加密
 
     ### 第五章  HTML解释器和DOM模型
+
+1. dom是一组与平台无关的标准，很多语言都可以操作DOM结构。DOM结构构成的基本要素是节点。例如整个文档（Document）是一个节点，Tag也是一种节点，每个节点按照层次组织就成了DOM属性结构，例如下面就是HTML网页标签和DOM树的对应关系：
+
+   ![HTML网页和它的DOM树表示](./images/HTML网页和它的DOM树表示.PNG)
+
+2. HTML解释器的工作过程如下，他就是把本地磁盘获取的HTML或者从网络上获取的字节流解释称DOM树结构。HTMLDocument继承自Document类，是被Frame类包含的。Frame使用FrameLoader加载完成后对Document做解析。
+
+   ![从资源的字节流到DOM树](./images/从资源的字节流到DOM树.PNG)
+
+   ![webkit构建dom所使用的的主要基础设施类](./images/webkit构建dom所使用的的主要基础设施类.PNG)
+
+   ![从网页的字节流到DOM树的一般构建过程](./images/从网页的字节流到DOM树的一般构建过程.PNG)
+
+3. 词法分析：主要要做的事情就是检查该网页内容使用的编码格式，然后后面使用合适的解码器，转换成Token。Token的类别一共有六种，包括DOCTYPE、StartTag、EndTag、comment、Character和EndOfFile。
+
+4. XSSAuditor验证词语，在Token生成之后，WebKit使用XSSAuditor来验证词语流，保证符合安全。然后才会用来构建DOM节点。具体的伪代码如下：
+
+   ![HTMLTreeBuilder处理词语](./images/HTMLTreeBuilder处理词语.PNG)
+
+5. 
