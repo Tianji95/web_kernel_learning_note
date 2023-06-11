@@ -162,24 +162,50 @@ web内核学习笔记《webkit技术内幕》
 
 16. QUIC是一种新的传输层协议，主要是改进UDP协议的传输效率和加密
 
-    ### 第五章  HTML解释器和DOM模型
+### 第五章  HTML解释器和DOM模型
 
 1. dom是一组与平台无关的标准，很多语言都可以操作DOM结构。DOM结构构成的基本要素是节点。例如整个文档（Document）是一个节点，Tag也是一种节点，每个节点按照层次组织就成了DOM属性结构，例如下面就是HTML网页标签和DOM树的对应关系：
 
-   ![HTML网页和它的DOM树表示](./images/HTML网页和它的DOM树表示.PNG)
+    ![HTML网页和它的DOM树表示](./images/HTML网页和它的DOM树表示.PNG)
 
 2. HTML解释器的工作过程如下，他就是把本地磁盘获取的HTML或者从网络上获取的字节流解释称DOM树结构。HTMLDocument继承自Document类，是被Frame类包含的。Frame使用FrameLoader加载完成后对Document做解析。
 
-   ![从资源的字节流到DOM树](./images/从资源的字节流到DOM树.PNG)
+    ![从资源的字节流到DOM树](./images/从资源的字节流到DOM树.PNG)
 
-   ![webkit构建dom所使用的的主要基础设施类](./images/webkit构建dom所使用的的主要基础设施类.PNG)
+    ![webkit构建dom所使用的的主要基础设施类](./images/webkit构建dom所使用的的主要基础设施类.PNG)
 
-   ![从网页的字节流到DOM树的一般构建过程](./images/从网页的字节流到DOM树的一般构建过程.PNG)
+    ![从网页的字节流到DOM树的一般构建过程](./images/从网页的字节流到DOM树的一般构建过程.PNG)
 
 3. 词法分析：主要要做的事情就是检查该网页内容使用的编码格式，然后后面使用合适的解码器，转换成Token。Token的类别一共有六种，包括DOCTYPE、StartTag、EndTag、comment、Character和EndOfFile。
 
 4. XSSAuditor验证词语，在Token生成之后，WebKit使用XSSAuditor来验证词语流，保证符合安全。然后才会用来构建DOM节点。具体的伪代码如下：
 
-   ![HTMLTreeBuilder处理词语](./images/HTMLTreeBuilder处理词语.PNG)
+    ![HTMLTreeBuilder处理词语](./images/HTMLTreeBuilder处理词语.PNG)
 
-5. 
+5. 在解析HTML标签的时候，HTML解析器使用的是栈的数据结构，例如<body><div><img></img></div></body>,遇到body一定是先压栈，然后再压div。DOM里面所有的类都继承自Node类，，而Node类主要继承自EventTarget类，以及一个和JavaScript引擎相关的ScriptWrappable类。如下所示
+
+    ![webkit节点类](./images/webkit节点类.PNG)
+
+6. 网页 foundation包括上面Frame等WebKit的基础类，也包括WebKit的一些更高层次的类，包括构建DOM树等操作、布局、渲染等操作。下面这张图就是chromium怎么使用webkit的接口的。chrome类是一个获取各个平台资源的类， 功能包括（1）跟用户界面和渲染显示相关的需要实现的接口集合类（2）继承自HostWindow类，包括一系列系统接口，用来通知重绘、更新整个窗口、滚动窗口（3）窗口相关操作，例如显示、隐藏窗口（4）显示和隐藏窗口中的工具栏、状态栏、滚动条（5）显示JS相关的窗口，例如JS的alert、confirm、prompt等。
+
+    ![webcore的主要网页类和chromium对外类](./images/webcore的主要网页类和chromium对外类.PNG)
+
+7. HTML解析是在单独的线程中执行，在将HTML解析成token后，会分批次将结果传递给渲染线程，如下图所示：![解释器线程将词语传递给主线程的过程](./images/解释器线程将词语传递给主线程的过程.PNG)
+
+8. HTML解释的过程中会遇到JS代码，JS代码执行是解释称Token后创建节点的时候。JS代码执行交由HTMLScriptRunner类来负责。JS代码的执行可能会阻塞后面节点的创建和后面资源的下载。所以一般建议JS代码在script元素上加上async属性。或者将script元素放在body元素的最后，这样就不阻塞其他资源的并发下载了。
+
+9. 事件的处理包括事件捕获和时间冒泡两个机制，事件的捕获是自顶向下的，例如Document→HTML→ body→img。事件冒泡是从下到上的，只有当事件包含一个冒泡属性的时候才会触发冒泡机制
+
+10. 事件的处理主要是查看节点是否注册了监听者，如果注册了，则会把事件派发给WebKit内核。这个过程也需要把整个浏览器放进去，例如滚动滚轮，有可能只是局部滚动浏览器不滚动，也可能是默认浏览器滚动。整个过程如下所示：
+
+    ![webkit处理事件的调用栈](./images/webkit处理事件的调用栈.PNG)
+
+11. 事件处理的代码例子如下，这三段代码需要在DOM树构件号以后才能调用执行：
+
+    ![使用事件捕获和冒泡机制的HTML代码](./images/使用事件捕获和冒泡机制的HTML代码.PNG)
+
+12. 影子DOM树：就是把一些DOM树作为模板（一个整体）保存起来，用的时候直接使用这个模板，JS遍历的时候是无法访问影子DOM树的内部的。代码示例如下![使用影子DOM的HTML网页程序](./images/使用影子DOM的HTML网页程序.PNG)
+
+### 第六章  CSS解释器和样式布局
+
+1. CSS解释器执行在DOM树建立之后，RenderObject树（渲染树）建立之前。
